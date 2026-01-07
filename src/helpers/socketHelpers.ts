@@ -2,6 +2,7 @@ import { cacheKeyStore, socketEvents } from "@/constants";
 import { MessagesPage } from "@/hooks";
 import { messageInterface } from "@/types/types";
 import { InfiniteData, QueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { Socket } from "socket.io-client";
 import { v4 as uuid } from "uuid";
 
@@ -145,54 +146,43 @@ export function markMessageAsFailedWithCountdown({
   }, 1000);
 }
 
-export function collectMarkSeenMessages({
-  socket,
-  chatId,
-  friendId,
-  messageId,
-  userId,
-}: {
-  socket: Socket;
-  chatId: number;
-  messageId: string;
-  friendId?: number;
-  userId: number;
-}) {
-  const seenMessageIds = new Set<string>();
+export function useSeenMessages(
+  socket: Socket,
+  chatId: number,
+  friendId?: number
+) {
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  if (seenMessageIds.has(messageId)) return;
-  seenMessageIds.add(messageId);
+  const markSeen = (messageId: string) => {
+    if (seenIdsRef.current.has(messageId)) return;
 
-  let timeoutId: NodeJS.Timeout | null = null;
-  const emitSeenMessage = () => {
-    console.log(
-      "Emitting seen message for chatId:",
-      chatId,
-      "messageIds:",
-      Array.from(seenMessageIds),
-      "friendId: ",
-      friendId,
-      "userId: ",
-      userId
-    );
+    seenIdsRef.current.add(messageId);
 
-    if (seenMessageIds.size > 0) {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(() => {
       socket.emit(socketEvents.MESSAGE_SEEN, {
         chatId,
-        messageIds: Array.from(seenMessageIds),
+        messageIds: Array.from(seenIdsRef.current),
         memberId: friendId,
       });
 
-      seenMessageIds.clear();
-    }
+      seenIdsRef.current.clear();
+      timeoutRef.current = null;
+    }, 300);
   };
 
-  if (timeoutId) {
-    clearTimeout(timeoutId);
-  }
-  timeoutId = setTimeout(emitSeenMessage, 300);
-}
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
+  return markSeen;
+}
 export function updateMessageSeenAt({
   chatId,
   queryClient,

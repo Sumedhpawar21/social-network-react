@@ -1,20 +1,32 @@
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import { useSeenMessages } from "@/helpers/socketHelpers";
 import { cn } from "@/lib/utils";
 import type { messageInterface } from "@/types/types";
 import { Check, Clock, MailCheck, XCircle } from "lucide-react";
-import React from "react";
-
+import React, { useEffect } from "react";
+import { useInView } from "react-intersection-observer";
+import { Socket } from "socket.io-client";
 interface MessageComponentProps {
   isSender: boolean;
   msg: messageInterface;
   friend_avatar: string | null;
   isLastMessage: boolean;
+  selectedChatId: number;
+  socket: Socket;
+  selectedFriendId: number;
 }
 
-const MessageComponent = React.forwardRef<
-  HTMLDivElement,
-  MessageComponentProps
->(({ isSender, msg, friend_avatar, isLastMessage }, ref) => {
+const MessageComponent = ({
+  isSender,
+  msg,
+  friend_avatar,
+  isLastMessage,
+  selectedChatId,
+  socket,
+  selectedFriendId,
+}: MessageComponentProps) => {
+  const { ref: messageInViewRef, inView } = useInView();
+  const markSeen = useSeenMessages(socket, selectedChatId, selectedFriendId);
   const formatTime = (timestamp: string | Date) => {
     if (!timestamp) return "";
     const date = new Date(timestamp);
@@ -28,9 +40,15 @@ const MessageComponent = React.forwardRef<
   const isSending = msg?.status === "sent";
   const isDelivered = msg?.status === "delivered";
 
+  useEffect(() => {
+    if (inView && !msg.seen_at && !isSender) {
+      markSeen(String(msg._id));
+    }
+  }, [inView]);
+
   return (
     <div
-      ref={ref}
+      ref={messageInViewRef}
       className={cn(
         "flex items-end gap-2 mb-2.5",
         isSender ? "justify-end" : "justify-start"
@@ -104,6 +122,6 @@ const MessageComponent = React.forwardRef<
       </div>
     </div>
   );
-});
+};
 
 export default React.memo(MessageComponent);

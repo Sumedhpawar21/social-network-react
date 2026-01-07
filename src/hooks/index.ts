@@ -2,7 +2,6 @@ import { getAllMessages } from "@/APIs/messagesAPI";
 import { cacheKeyStore } from "@/constants";
 import {
   addNewMessageToCache,
-  collectMarkSeenMessages,
   mapDbMessageToTempMessage,
   markMessageAsFailedWithCountdown,
   updateMessageSeenAt,
@@ -13,14 +12,7 @@ import {
   QueryClient,
   useInfiniteQuery,
 } from "@tanstack/react-query";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { useInView } from "react-intersection-observer";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
 
 type EventHandlers = {
@@ -132,10 +124,7 @@ function useUserId(
 export function useNewMessagesListener(
   selectedChatId: number,
   userId: number,
-  queryClient: QueryClient,
-  socket: Socket,
-  selectedFriendId: number,
-  lastMessageRef: React.RefObject<HTMLDivElement>
+  queryClient: QueryClient
 ) {
   return useCallback(
     (data: { chatId: number; messageForRealTime: messageInterface }) => {
@@ -146,15 +135,6 @@ export function useNewMessagesListener(
         chatId: selectedChatId,
         message: data.messageForRealTime,
       });
-      if (lastMessageRef.current) {
-        collectMarkSeenMessages({
-          chatId: selectedChatId,
-          messageId: String(data.messageForRealTime._id),
-          socket: socket,
-          friendId: selectedFriendId,
-          userId,
-        });
-      }
     },
     [selectedChatId, userId, queryClient]
   );
@@ -227,55 +207,7 @@ export const useStopTypingListener = ({
   );
 };
 
-interface UseChatScrollOptions {
-  bottomRef: React.RefObject<HTMLDivElement>;
-  lastMessageRef: React.RefObject<HTMLDivElement>;
-  messagesLength: number;
-  setNewMessagesAlert: (i: []) => void;
-}
 
-export function useChatScroll(params: UseChatScrollOptions) {
-  const { bottomRef, lastMessageRef, messagesLength, setNewMessagesAlert } =
-    params;
-  const [showScrollButton, setShowScrollButton] = useState(false);
-  const isFirstRender = useRef(true);
-
-  const { ref: observerRef, inView } = useInView({
-    rootMargin: "-50px 0px 0px 0px",
-    skip: messagesLength < 3,
-  });
-
-  useLayoutEffect(() => {
-    if (lastMessageRef.current) {
-      observerRef(lastMessageRef.current);
-    }
-  }, [lastMessageRef, observerRef, messagesLength]);
-
-  useLayoutEffect(() => {
-    if (messagesLength > 0 && bottomRef.current) {
-      if (isFirstRender.current) {
-        bottomRef.current.scrollIntoView({ behavior: "auto" });
-        setNewMessagesAlert([]);
-        isFirstRender.current = false;
-      } else if (inView || messagesLength < 3) {
-        bottomRef.current.scrollIntoView({ behavior: "smooth" });
-      }
-    }
-  }, [messagesLength, inView, bottomRef]);
-
-  useLayoutEffect(() => {
-    if (messagesLength < 3) {
-      setShowScrollButton(false);
-      return;
-    }
-    const timer = setTimeout(() => {
-      setShowScrollButton(!inView);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [inView, messagesLength]);
-
-  return { showScrollButton };
-}
 
 export function useMessageSeenListener(queryClient: QueryClient) {
   return useCallback(

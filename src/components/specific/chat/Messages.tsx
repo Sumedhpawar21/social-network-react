@@ -3,7 +3,6 @@ import TypingLoader from "@/components/ui/TypingLoader";
 import { socketEvents } from "@/constants";
 
 import {
-  useChatScroll,
   useFailMessageListener,
   useGetMessages,
   useMapDbMessageToTempMessageListener,
@@ -14,10 +13,9 @@ import {
   useStopTypingListener,
 } from "@/hooks";
 import { QueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
 import MessageComponent from "./MessageComponent";
-import { scrollToBottomHelper } from "@/helpers/socketHelpers";
 
 interface MessagesProps {
   queryClient: QueryClient;
@@ -48,6 +46,8 @@ const Messages: React.FC<MessagesProps> = ({
     useGetMessages({
       chatId: selectedChatId,
     });
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
 
   const messages = useMemo(() => {
     return data?.pages?.flatMap((page) => page?.data ?? []) ?? [];
@@ -55,23 +55,37 @@ const Messages: React.FC<MessagesProps> = ({
 
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
-  const lastMessageRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isFetching && reversedMessages.length > 0 && isAtBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      setNewMessagesAlert([]);
+    }
+  }, [isFetching, reversedMessages.length, bottomRef, isAtBottom]);
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
 
-  const { showScrollButton } = useChatScroll({
-    bottomRef,
-    lastMessageRef,
-    messagesLength: reversedMessages.length,
-    setNewMessagesAlert,
-  });
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 135;
+
+    setIsAtBottom(nearBottom);
+  };
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) {
+      setIsAtBottom(el.scrollHeight === el.scrollTop + el.clientHeight);
+      el.addEventListener("scroll", handleScroll);
+    }
+    return () => {
+      const el = scrollContainerRef.current;
+      el?.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   const newMessageListener = useNewMessagesListener(
     selectedChatId,
     userId,
-    queryClient,
-    socket,
-    selectedFriendId,
-    lastMessageRef
+    queryClient
   );
   const mapMessageListener = useMapDbMessageToTempMessageListener(
     selectedChatId,
@@ -160,7 +174,9 @@ const Messages: React.FC<MessagesProps> = ({
               msg={msg}
               isSender={isSender}
               isLastMessage={isLastMessage}
-              ref={isLastMessage ? lastMessageRef : undefined}
+              selectedChatId={selectedChatId}
+              socket={socket}
+              selectedFriendId={selectedFriendId}
             />
           );
         })}
@@ -174,9 +190,11 @@ const Messages: React.FC<MessagesProps> = ({
         <div ref={bottomRef} />
       </div>
 
-      {showScrollButton && (
+      {!isAtBottom && messages.length > 0 && (
         <button
-          onClick={() => scrollToBottomHelper(bottomRef)}
+          onClick={() =>
+            bottomRef?.current?.scrollIntoView({ behavior: "smooth" })
+          }
           className="absolute bottom-4 right-4 bg-blue-500 text-white px-3 py-1 rounded shadow-lg text-sm hover:bg-blue-600 transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-400"
           aria-label="Scroll to latest messages"
           tabIndex={0}
