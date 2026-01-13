@@ -1,0 +1,72 @@
+name: social network frontend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Vite React
+        run: npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          port: ${{ secrets.SERVER_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            APP_ROOT="/var/www/social-network-react"
+            RELEASES="$APP_ROOT/releases"
+            CURRENT="$APP_ROOT/current"
+
+            mkdir -p "$RELEASES"
+
+
+            BUILD_DIR="$RELEASES/$(date +%s)"
+            mkdir -p "$BUILD_DIR"
+
+            echo "📦 Pulling latest code"
+            cd "$APP_ROOT/source"
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "📦 Installing dependencies"
+            npm ci
+
+            echo "📦 Building static files"
+            npm run build
+
+            mv dist/* "$BUILD_DIR/"
+
+            echo "🔁 Updating current symlink"
+            ln -sfn "$BUILD_DIR" "$CURRENT"
+
+            echo "✅ Frontend deployed"
+            cd "$RELEASES"
+            ls -1t | tail -n +6 | xargs rm -rf --
