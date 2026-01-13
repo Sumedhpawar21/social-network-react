@@ -12,18 +12,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: "20"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build Vite React
-        run: npm run build
-
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -52,7 +40,7 @@ jobs:
             mkdir -p "$BUILD_DIR"
 
             echo "📦 Pulling latest code"
-            cd "$APP_ROOT/source"
+            cd "$APP_ROOT"
             git fetch origin main
             git reset --hard origin/main
 
