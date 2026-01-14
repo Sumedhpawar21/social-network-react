@@ -34,7 +34,7 @@ const StoryContent = ({ setDialogOpen, storyData }: StoryContentProps) => {
     setTimeout(() => {
       callback();
       setIsAnimating(false);
-    }, 150); // half the duration of transition
+    }, 150);
   };
 
   const handlePrev = () => {
@@ -107,7 +107,7 @@ const StoryContent = ({ setDialogOpen, storyData }: StoryContentProps) => {
         )}
 
         <img
-          key={stories[currentIndex]?.id} // triggers transition
+          key={stories[currentIndex]?.id}
           src={stories[currentIndex]?.content}
           alt={`story-${currentIndex}`}
           className={`w-[60%] max-h-[300px] object-contain transition-all duration-300 ease-in-out ${
